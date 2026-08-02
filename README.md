@@ -23,9 +23,14 @@ use wt_slice::*;
 
 Now you can enjoy high performance of common algorithms on slices:
 
+- `exact_search`
+- `exact_search_by`
+- `exact_search_by_key`
 - `lower_bound`
 - `upper_bound`
 - `equal_range`
+
+The exact-search methods return `Result<matching_index, insertion_index>`. Their search loop exits early on equality while using unpredictable conditional selection for the left/right decision, avoiding the most expensive branch in a conventional binary search.
 
 ### Why isn't this part of the standard library?
 
