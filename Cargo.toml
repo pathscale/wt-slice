@@ -13,19 +13,21 @@
 # limitations under the License.
 
 [package]
-name = "superslice"
-version = "1.0.0"
-authors = ["Alkis Evlogimenos <alkis@evlogimenos.com>"]
-description = "Extensions for slices"
-homepage = "https://github.com/alkis/superslice-rs"
-repository = "https://github.com/alkis/superslice-rs"
+name = "wt-slice"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+authors = ["Alkis Evlogimenos <alkis@evlogimenos.com>", "Pathscale"]
+description = "High-performance ordered-slice search extensions"
+homepage = "https://github.com/pathscale/wt-slice"
+repository = "https://github.com/pathscale/wt-slice"
 keywords = ["slice", "ord", "performance", "permutation"]
 categories = ["algorithms"]
 readme = "README.md"
 license = "Apache-2.0"
 
 [lib]
-name = "superslice"
+name = "wt_slice"
 bench = false
 
 [dev-dependencies]
@@ -33,6 +35,3 @@ rand = "0.6"
 
 [profile.bench]
 opt-level = 3
-
-[badges]
-travis-ci = { repository = "alkis/superslice-rs" }

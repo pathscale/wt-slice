@@ -1,30 +1,24 @@
-This crate provides extensions for [`slice`](https://doc.rust-lang.org/stable/std/primitive.slice.html)s.
+# wt-slice
 
-[![Build Status](https://travis-ci.org/alkis/superslice-rs.svg?branch=master)](https://travis-ci.org/alkis/superslice-rs)
-[![Latest Version](https://img.shields.io/crates/v/superslice.svg)](https://crates.io/crates/superslice)
+High-performance extensions for ordered [`slice`](https://doc.rust-lang.org/stable/std/primitive.slice.html)s.
+
+This is a fork of [superslice](https://github.com/alkis/superslice-rs). It preserves superslice's lower-bound, upper-bound, equal-range, and permutation APIs while adding exact-search experiments for WorkTablesIndex.
 
 Licensed under APACHE-2.
 
-### Documentation
-
-https://docs.rs/superslice
-
 ### Installation
 
-This crate works with Cargo and is on
-[crates.io](https://crates.io/crates/ordslice). Add it to your `Cargo.toml`:
+Until the fork is published, use its Git repository:
 
 ```toml
 [dependencies]
-superslice = "1"
+wt-slice = { git = "https://github.com/pathscale/wt-slice" }
 ```
 
 and augment `slice`s by using its `Ext` trait:
 
 ```rust
-extern crate superslice;
-
-use superslice::*;
+use wt_slice::*;
 ```
 
 Now you can enjoy high performance of common algorithms on slices:
