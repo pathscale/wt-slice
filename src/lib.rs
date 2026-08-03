@@ -19,7 +19,7 @@
 //! # Examples
 //! 
 //! ```
-//! use superslice::*;
+//! use wt_slice::*;
 //! 
 //! let b = [1, 3];
 //! 
@@ -32,6 +32,91 @@
 //! 
 //! [`slice`]: https://doc.rust-lang.org/stable/std/primitive.slice.html
 use core::cmp::Ordering::{self, Less, Greater};
+
+/// Exact search for ordered slices with an early equality exit and branchless
+/// search-direction selection.
+///
+/// This combines the useful properties of a conventional early-exit binary
+/// search with the conditional selection used by modern standard-library
+/// binary search implementations. It returns either a matching index or the
+/// position where the value can be inserted while preserving order.
+pub trait ExactSearch {
+    type Item;
+
+    /// Searches for `x`, returning a matching index or its insertion position.
+    fn exact_search(&self, x: &Self::Item) -> Result<usize, usize>
+    where
+        Self::Item: Ord;
+
+    /// Searches with a comparator, returning a match or insertion position.
+    fn exact_search_by<'a, F>(&'a self, f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&'a Self::Item) -> Ordering;
+
+    /// Searches by an extracted key, returning a match or insertion position.
+    fn exact_search_by_key<'a, K, F>(&'a self, key: &K, f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&'a Self::Item) -> K,
+        K: Ord;
+}
+
+impl<T> ExactSearch for [T] {
+    type Item = T;
+
+    #[inline]
+    fn exact_search(&self, x: &Self::Item) -> Result<usize, usize>
+    where
+        Self::Item: Ord,
+    {
+        self.exact_search_by(|candidate| candidate.cmp(x))
+    }
+
+    #[inline]
+    fn exact_search_by<'a, F>(&'a self, mut f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&'a Self::Item) -> Ordering,
+    {
+        let mut size = self.len();
+        if size == 0 {
+            return Err(0);
+        }
+
+        let mut base = 0;
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+
+            // SAFETY: `base + size` never exceeds `self.len()`, and
+            // `half < size`, so `mid` is always a valid index.
+            let cmp = f(unsafe { self.get_unchecked(mid) });
+            if cmp == Ordering::Equal {
+                return Ok(mid);
+            }
+
+            // Search direction is deliberately expressed as an unpredictable
+            // selection so supported targets use a conditional move rather
+            // than a hard-to-predict left/right branch.
+            base = core::hint::select_unpredictable(cmp == Greater, base, mid);
+            size -= half;
+        }
+
+        // SAFETY: a non-empty search retains `base < self.len()`.
+        match f(unsafe { self.get_unchecked(base) }) {
+            Ordering::Less => Err(base + 1),
+            Ordering::Equal => Ok(base),
+            Ordering::Greater => Err(base),
+        }
+    }
+
+    #[inline]
+    fn exact_search_by_key<'a, K, F>(&'a self, key: &K, mut f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&'a Self::Item) -> K,
+        K: Ord,
+    {
+        self.exact_search_by(|candidate| f(candidate).cmp(key))
+    }
+}
 
 /// Extends [`slice`] with fast operations on ordered slices.
 /// 
@@ -47,7 +132,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let a = [10, 11, 13, 13, 15];
     /// assert_eq!(a.lower_bound(&9), 0);
     /// assert_eq!(a.lower_bound(&10), 0);
@@ -72,7 +157,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [1, 2, 3, 6, 9, 9];
     /// assert_eq!(b.lower_bound(&3), b.lower_bound_by(|x| x.cmp(&3)));
     /// ```
@@ -89,7 +174,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [1, 2, 3, 6, 9, 9];
     /// assert_eq!(b.lower_bound(&3), b.lower_bound_by_key(&6, |x| x * 2));
     /// ```
@@ -106,7 +191,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let a = [10, 11, 13, 13, 15];
     /// assert_eq!(a.upper_bound(&9), 0);
     /// assert_eq!(a.upper_bound(&10), 1);
@@ -131,7 +216,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [1, 2, 3, 6, 9, 9];
     /// assert_eq!(b.upper_bound(&3), b.upper_bound_by(|x| x.cmp(&3)));
     /// ```
@@ -148,7 +233,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [1, 2, 3, 6, 9, 9];
     /// assert_eq!(b.lower_bound(&3), b.lower_bound_by_key(&6, |x| x * 2));
     fn upper_bound_by_key<'a, K, F>(&'a self, k: &K, f: F) -> usize
@@ -164,7 +249,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [10, 11, 13, 13, 15];
     /// for i in 9..17 {
     ///     assert_eq!(b.equal_range(&i), (b.lower_bound(&i)..b.upper_bound(&i)));
@@ -185,7 +270,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [10, 11, 13, 13, 15];
     /// for i in 9..17 {
     ///     assert_eq!(b.equal_range(&i), b.equal_range_by(|x| x.cmp(&i)));
@@ -205,7 +290,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let b = [10, 11, 13, 13, 15];
     /// for i in 9..17 {
     ///     let i2 = i * 2;
@@ -226,7 +311,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let mut b = [2, 1, 3];
     /// let mut v = Vec::new();
     /// for _ in 0..6 {
@@ -251,7 +336,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let mut b = [2, 1, 3];
     /// let mut v = Vec::new();
     /// for _ in 0..6 {
@@ -285,7 +370,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let mut b = ['d', 'a', 'c', 'b'];
     /// let mut p = [1, 3, 2, 0];
     /// b.apply_permutation(&mut p);
@@ -310,7 +395,7 @@ pub trait Ext {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let mut b = ['d', 'a', 'c', 'b'];
     /// let mut p = [3, 0, 2, 1];
     /// b.apply_inverse_permutation(&mut p);
@@ -491,7 +576,7 @@ impl<T> Ext for [T] {
 
     fn apply_permutation(&mut self, perm: &mut [isize]) {
         assert_eq!(self.len(), perm.len());
-        assert!(self.len() < isize::max_value() as usize);
+        assert!(self.len() < isize::MAX as usize);
         for i in 0..self.len() as isize {
             let mut c = perm[i as usize];
             if c < 0 {
@@ -510,7 +595,7 @@ impl<T> Ext for [T] {
 
     fn apply_inverse_permutation(&mut self, perm: &mut [isize]) {
         assert_eq!(self.len(), perm.len());
-        assert!(self.len() < isize::max_value() as usize);
+        assert!(self.len() < isize::MAX as usize);
         for i in 0..self.len() as isize {
             let mut c = perm[i as usize];
             if c < 0 {
@@ -538,7 +623,7 @@ pub trait Ext2 {
     /// # Example:
     /// 
     /// ```
-    /// # use superslice::*;
+    /// # use wt_slice::*;
     /// let mut p = [1, 3, 2, 0];
     /// p.invert_permutation();
     /// assert_eq!(p, [3, 0, 2, 1]);
@@ -547,7 +632,7 @@ pub trait Ext2 {
 
 impl Ext2 for [isize] {
     fn invert_permutation(&mut self) {
-        assert!(self.len() < isize::max_value() as usize);
+        assert!(self.len() < isize::MAX as usize);
         for i in 0..self.len() as isize {
             let mut c = self[i as usize];
             if c < 0 {
@@ -571,7 +656,42 @@ impl Ext2 for [isize] {
 
 #[cfg(test)]
 mod tests {
-    use super::Ext;
+    extern crate std;
+
+    use super::{ExactSearch, Ext};
+
+    #[test]
+    fn exact_search_matches_insertion_semantics() {
+        for size in 0..=128 {
+            let values: std::vec::Vec<u32> = (0..size).map(|value| value * 2 + 2).collect();
+            for needle in 0..=(size * 2 + 4) {
+                let insertion = values.partition_point(|candidate| candidate < &needle);
+                let expected = match values.get(insertion) {
+                    Some(candidate) if candidate == &needle => Ok(insertion),
+                    _ => Err(insertion),
+                };
+
+                assert_eq!(values.exact_search(&needle), expected, "size={size}, needle={needle}");
+                assert_eq!(
+                    values.exact_search_by(|candidate| candidate.cmp(&needle)),
+                    expected,
+                    "size={size}, needle={needle}",
+                );
+                assert_eq!(
+                    values.exact_search_by_key(&needle, |candidate| *candidate),
+                    expected,
+                    "size={size}, needle={needle}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn exact_search_accepts_any_equal_duplicate() {
+        let values = [1, 3, 3, 3, 5];
+        let found = values.exact_search(&3).unwrap();
+        assert_eq!(values[found], 3);
+    }
 
     #[test]
     fn lower_bound() {

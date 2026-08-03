@@ -14,12 +14,12 @@
 
 #![feature(test)]
 
-extern crate superslice;
+extern crate wt_slice;
 extern crate rand;
 extern crate test;
 
 use rand::distributions::{Distribution, Uniform};
-use superslice::*;
+use wt_slice::*;
 use test::Bencher;
 
 enum Cache {
